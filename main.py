@@ -150,9 +150,9 @@ def check_system_readiness():
 def main():
     try:
         msd = selected_file()
-        config_data = utils.read_json_config(msd)
+        config_data = read_json_config(msd)
         ums = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
-    except (FileNotFoundError, IndexError) as e:
+    except (FileNotFoundError, IndexError, ValueError) as e:
         print(f"\033[31m配置加载失败: {e}\033[0m")
         sys.exit(1)
 
