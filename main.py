@@ -161,7 +161,7 @@ def main():
             _MODEL_CACHE[msd] = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
         ums = _MODEL_CACHE[msd]
     except (FileNotFoundError, IndexError, ValueError) as e:
-        print(f"\033[31m配置加载失败: {e}\033[0m")
+        cprint(f"配置加载失败: {e}", 'warning')
         sys.exit(1)
 
     while True:  # 输入验证循环
@@ -170,7 +170,7 @@ def main():
             preset_name = list(preset_prompts.keys())[selected]
             break
         except (ValueError, IndexError):
-            print("\033[31m输入无效，请重新选择\033[0m")
+            cprint("输入无效，请重新选择", 'warning')
 
     ums.introduce()
     use_model = ums.model
@@ -190,7 +190,7 @@ def main():
     saved_preset, saved_context = load_history()
 
     if saved_preset and saved_context:
-        print(f"\n\033[31m找到上次的对话记录（预设角色：\033[0m{saved_preset}）")
+        cprint(f"找到上次的对话记录（预设角色：{saved_preset}", 'system')
         choice = input("\033[31m是否恢复上次对话？(\033[0my\033[31m/\033[0mn\033[31m):\033[0m ").lower()
         if choice == 'y':
             preset_name = saved_preset
@@ -208,7 +208,7 @@ def main():
         for i, (name) in enumerate(preset_prompts.items(), 1):
             print(f"{i}. {name}")
 
-        selected = int(input("\033[31m请选择预设角色（输入编号）：\033[0m")) - 1
+        selected = int(q_input("请选择预设角色（输入编号）：")) - 1
         preset_name = list(preset_prompts.keys())[selected]
 
     # 对话循环
@@ -217,20 +217,20 @@ def main():
     def process_response(response, preset_name):
         ai_response = preprocess_response(response.choices[0].message.content).lstrip()
         conversation_context.append({"role": "assistant", "content": ai_response})
-        print(f"\n{preset_name}：", add_newline_after_punctuation(ai_response))
+        cprint(f"{preset_name}：{add_newline_after_punctuation(ai_response)}", 'speech')
         print(get_tokenize(ai_response, config.tknz_path))
 
     _lazy_imports()  # 实际需要时加载
     with ThreadPoolExecutor(max_workers=2) as executor:  # 减少初始线程数
         while True:
-            user_input = input("\n\033[36mYou：\033[0m").strip()
+            user_input = q_input("\nYou：").strip()
 
             if user_input.lower() in ["\\bye", "exit", "quit"]:
                 save_choice = input("\033[31m是否保存当前对话？(y/n): \033[0m").lower()
                 if save_choice == 'y':
                     save_history(preset_name, conversation_context)
                     print(f"\033[32m对话已保存到 {config.HISTORY_FILE}\033[30m")
-                print("对话结束")
+                cprint("对话结束", 'system')
                 break
 
             user_input += get_current_time_info()
@@ -268,24 +268,33 @@ def exit_program():
 
 
 def perform_operation():
+    # 定义一个字典，用于存储操作和对应的函数
     operations = {
         1: print_welcome,
         2: calculate_sum,
         3 : main,
         4: exit_program
     }
+    # 遍历字典，打印操作和对应的函数名
     for key, value in operations.items():
         print(f"{key}. {value.__name__}")
+    # 尝试获取用户输入的操作数字
     try:
         choice = int(input("\033[31m请输入操作对应的数字：\033[0m"))
+        # 判断用户输入的数字是否在字典中
         if choice in operations:
+            # 调用对应的函数
             result = operations[choice]()
+            # 如果函数返回结果不为空，则返回
             if result is not None:
                 return
         else:
+            # 如果用户输入的数字不在字典中，则打印错误信息
             print("\033[31m输入的数字无效，请输入有效数字。\033[0m")
     except ValueError:
+        # 如果用户输入的不是整数，则打印错误信息
         print("\033[31m输入无效，请输入一个有效的整数。\033[0m")
+    # 递归调用perform_operation函数，重新开始
     perform_operation()
 
 def mainloop():
