@@ -1,4 +1,4 @@
-# ShioOfficial - 智能对话助手
+# ShioOfficial - 林汐然
 
 ## 项目简介
 基于Deepseek模型的智能对话系统，支持本地和云端模型配置，提供交互式对话管理功能。
