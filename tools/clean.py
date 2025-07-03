@@ -20,7 +20,7 @@ def clean_text_file(file_path):
             content = file.read()
 
         # 使用正则表达式删除特定符号
-        cleaned_content = re.sub(r'[-#*```]', '', content)
+        cleaned_content = re.sub(r'[-#* ```]', '', content)
 
         # 将清理后的内容写回文件
         with open(file_path, 'w', encoding='utf-8') as file:
@@ -33,6 +33,9 @@ def clean_text_file(file_path):
 
 
 if __name__ == "__main__":
-    # 文件路径（假设与程序同目录）
-    file_path = "prompt.txt"
+    # 获取当前脚本所在目录的绝对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 构造完整的文件路径
+    file_path = os.path.join(current_dir, "prompt.txt")
     clean_text_file(file_path)
