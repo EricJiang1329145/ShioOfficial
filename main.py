@@ -61,10 +61,32 @@ def load_history():
     return None, None
 
 
+# 系统自检
+def check_system_readiness():
+    """系统自检功能：验证配置文件和依赖"""
+    if not os.path.exists(config.model_settings_dir):
+        raise FileNotFoundError(f"模型配置目录不存在: {config.model_settings_dir}")
+    if not os.listdir(config.model_settings_dir):
+        raise FileNotFoundError("模型配置目录为空")
+
+
 # 主程序
 def main():
-    msd = selected_file()
-    ums = ModelSettings(read_specific_line(msd, 1), read_specific_line(msd, 2), read_specific_line(msd, 3))
+    try:
+        msd = selected_file()
+        ums = ModelSettings(read_specific_line(msd, 1), read_specific_line(msd, 2), read_specific_line(msd, 3))
+    except (FileNotFoundError, IndexError) as e:
+        print(f"\033[31m配置加载失败: {e}\033[0m")
+        sys.exit(1)
+
+    while True:  # 输入验证循环
+        try:
+            selected = int(input("请选择预设角色（输入编号）：")) - 1
+            preset_name = list(preset_prompts.keys())[selected]
+            break
+        except (ValueError, IndexError):
+            print("\033[31m输入无效，请重新选择\033[0m")
+
     ums.introduce()
     use_model = ums.model
     api_key_s = ums.apiKey
@@ -174,6 +196,12 @@ def perform_operation():
 
 
 if __name__ == "__main__":
+    try:
+        check_system_readiness()
+        print("\033[32m系统自检通过\033[0m")
+    except Exception as e:
+        print(f"\033[31m系统初始化失败: {e}\033[0m")
+        sys.exit(1)
 
     print_welcome()
     perform_operation()
