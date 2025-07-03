@@ -155,30 +155,42 @@ _MODEL_CACHE = {}
 
 def main():
     try:
+        # 获取选择的文件
         msd = selected_file()
+        # 如果选择的文件不在缓存中，则读取配置文件并创建模型设置
         if msd not in _MODEL_CACHE:
+            # 读取msd路径下的json配置文件
             config_data = read_json_config(msd)
+            # 将模型设置缓存到_MODEL_CACHE字典中，键为msd，值为ModelSettings对象，参数为config_data字典中的model、api_key和url
             _MODEL_CACHE[msd] = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
+        # 获取模型设置
         ums = _MODEL_CACHE[msd]
     except (FileNotFoundError, IndexError, ValueError) as e:
+        # 如果发生错误，则打印错误信息并退出程序
         cprint(f"配置加载失败: {e}", 'warning')
         sys.exit(1)
 
     while True:  # 输入验证循环
         try:
+            # 获取用户输入的角色编号
             selected = int(input("请选择预设角色（输入编号）：")) - 1
+            # 获取对应角色的预设名称
             preset_name = list(preset_prompts.keys())[selected]
             break
         except (ValueError, IndexError):
+            # 如果输入无效，则打印提示信息
             cprint("输入无效，请重新选择", 'warning')
 
+    # 介绍角色
     ums.introduce()
+    # 获取模型、API密钥和URL
     use_model = ums.model
     api_key_s = ums.apiKey
     urls = ums.url
 
     use_stream = False
     use_temperature = 0.9
+    # 创建OpenAI客户端
     client = OpenAI(api_key=api_key_s, base_url=urls)
 
     # 调用函数并传入文件名
@@ -190,15 +202,18 @@ def main():
     saved_preset, saved_context = load_history()
 
     if saved_preset and saved_context:
+        # 如果找到历史记录，则打印提示信息并询问用户是否恢复
         cprint(f"找到上次的对话记录（预设角色：{saved_preset}", 'system')
         choice = input("\033[31m是否恢复上次对话？(\033[0my\033[31m/\033[0mn\033[31m):\033[0m ").lower()
         if choice == 'y':
+            # 如果用户选择恢复，则恢复对话并修改JSON文件
             preset_name = saved_preset
             conversation_context = saved_context
             print("\033[31m对话已恢复，输入'退出'结束对话\033[0m")
             modify_json_system_content(config.HISTORY_FILE, file_content)
 
         else:
+            # 如果用户选择不恢复，则清空历史记录
             saved_preset = None
 
     if not saved_preset:
