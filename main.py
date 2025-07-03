@@ -55,7 +55,7 @@ def selected_file() -> str:
         _CONFIG_CACHE['mtime'] = current_mtime
     
     selected_file = ask_user_choice(_CONFIG_CACHE['files'])
-    print(f"\033[31m你选择的文件是: \033[0m{selected_file}")
+    cprint(f"你选择的文件是:{os.path.basename(selected_file)}", 'prompt')
     return selected_file
 
 

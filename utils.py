@@ -154,18 +154,41 @@ def modify_json_system_content(file_path, new_content):
     except Exception as e:
         cprint(f"错误: 发生了一个未知错误: {e}", 'warning')
 
+def get_json_value(file_path, key):
+    """
+    安全获取JSON文件指定键值
+    
+    :param file_path: JSON文件路径
+    :param key: 需要获取的键名
+    :return: 键值或None
+    """
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+            return data.get(key)
+    except Exception as e:
+        logging.warning(f"读取{file_path}失败: {str(e)}")
+        return None
+
+
 def ask_user_choice(file_list):
     """
     询问用户选择使用哪个文件
     :param file_list: 可读取文件的列表
     :return: 用户选择的文件路径
     """
-    if not file_list:
-        cprint("未找到可读取的文件。", 'warning')
+    # 过滤并增强JSON文件显示
+    json_files = [f for f in file_list if f.lower().endswith('.json')]
+    if not json_files:
+        cprint("未找到有效的JSON配置文件", 'warning')
         return None
-    cprint("可读取的文件有：", 'prompt')
-    for i, file in enumerate(file_list, start=1):
-        cprint(f"{i}. {file}", 'system')
+    
+    cprint("\n可用模型配置（名称 ▶ 文件）", 'prompt')
+    cprint("─"*40, 'system')
+    for i, file_path in enumerate(json_files, 1):
+        model_name = get_json_value(file_path, 'model') or '未命名模型'
+        file_name = os.path.basename(file_path)
+        cprint(f"{i}. {model_name:25} ▶ {file_name}", 'system')
     while True:
         try:
             choice = int(q_input("请输入要使用的文件编号: "))
