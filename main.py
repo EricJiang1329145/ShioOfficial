@@ -8,14 +8,48 @@ import os
 
 
 class ConfigManager:
+    """
+    集中管理应用程序配置的中央控制器
+    功能：
+    - 管理环境变量与默认配置的优先级
+    - 统一管理文件系统路径
+    - 提供配置项的安全访问
+    配置项说明：
+    • CONFIG_DIR: 配置文件目录 (环境变量: ASSISTANT_CONFIG)
+    • tknz_path: 分词器资源路径
+    • HISTORY_FILE: 对话历史存储路径
+    • model_settings_dir: 模型配置目录 (环境变量: MODEL_SETTINGS_DIR)
+    使用示例：
+    >>> config = ConfigManager()
+    >>> print(config.HISTORY_FILE)
+    """
+    # 初始化ConfigManager类
     def __init__(self):
+        # 获取环境变量ASSISTANT_CONFIG的值，如果没有设置，则默认为.assistant_config
         self.CONFIG_DIR = os.getenv('ASSISTANT_CONFIG', '.assistant_config')
+        # 获取当前文件所在目录，并拼接上tknz目录，得到tknz_path
         self.tknz_path = os.path.join(os.path.dirname(__file__), 'tknz')
+        # 将CONFIG_DIR和conversation_history.json拼接，得到HISTORY_FILE
         self.HISTORY_FILE = os.path.join(self.CONFIG_DIR, 'conversation_history.json')
+        # 获取环境变量MODEL_SETTINGS_DIR的值，如果没有设置，则默认为modelSettings
         self.model_settings_dir = os.getenv('MODEL_SETTINGS_DIR', 'modelSettings')
 
 config = ConfigManager()
-def selected_file():
+def selected_file() -> str:
+    """
+    交互式选择模型配置文件
+
+    流程:
+    1. 扫描配置目录获取可用文件列表
+    2. 用户交互式选择文件
+    3. 返回完整文件路径
+
+    返回:
+        str: 用户选择的配置文件绝对路径
+
+    异常:
+        FileNotFoundError: 当配置目录为空时抛出
+    """
     files = search_files(config.model_settings_dir)
     selected_file = ask_user_choice(files)
     print(f"\033[31m你选择的文件是: \033[0m{selected_file}")
@@ -23,12 +57,28 @@ def selected_file():
 
 
 class ModelSettings:
-    def __init__(self, model, api_key, url):
+    """模型配置信息容器
+
+    属性:
+        model (str): 模型标识名称
+        apiKey (str): API访问密钥
+        url (str): 服务端点URL
+
+    示例:
+        >>> settings = ModelSettings('deepseek', 'sk-xxx', 'https://api.deepseek.com')
+    """
+    def __init__(self, model: str, api_key: str, url: str):
         self.model = model
         self.apiKey = api_key
         self.url = url
 
-    def introduce(self):
+    def introduce(self) -> None:
+        """打印模型配置概要信息
+
+        输出格式:
+            [模型名称] [API密钥掩码] [服务端点]
+            示例: deepseek sk-***3 https://api.deepseek.com
+        """
         print(self.model, self.apiKey, self.url)
 
 
@@ -40,21 +90,47 @@ def init_config():
 
 
 # 保存对话上下文
+from threading import Lock
+import queue
+
+history_cache = {}
+file_lock = Lock()
+log_queue = queue.Queue()
+
+def async_writer():
+    while True:
+        item = log_queue.get()
+        if item is None:
+            break
+        preset, ctx = item
+        with file_lock:
+            with open(config.HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump({"preset": preset, "history": ctx}, f, ensure_ascii=False, indent=2)
+
+from threading import Thread
+writer_thread = Thread(target=async_writer, daemon=True)
+writer_thread.start()
+
 def save_history(preset_name, context):
     init_config()
+    global history_cache
+    history_cache = {'preset': preset_name, 'history': context}
     try:
-        with open(config.HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump({"preset": preset_name, "history": context}, f, ensure_ascii=False, indent=2)  # type: ignore
+        log_queue.put((preset_name, context))
     except Exception as e:
         print(f"\033[31m保存历史记录失败: \033[0m{str(e)}")
 
 
 # 加载历史记录
 def load_history():
+    global history_cache
+    if history_cache:
+        return history_cache.get('preset'), history_cache.get('history')
     try:
         if os.path.exists(config.HISTORY_FILE):
             with open(config.HISTORY_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+                history_cache.update(data)
                 return data['preset'], data['history']
     except Exception as e:
         print(f"\033[31m加载历史记录失败: \033[0m{str(e)}")
@@ -74,7 +150,8 @@ def check_system_readiness():
 def main():
     try:
         msd = selected_file()
-        ums = ModelSettings(read_specific_line(msd, 1), read_specific_line(msd, 2), read_specific_line(msd, 3))
+        config_data = utils.read_json_config(msd)
+        ums = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
     except (FileNotFoundError, IndexError) as e:
         print(f"\033[31m配置加载失败: {e}\033[0m")
         sys.exit(1)
@@ -127,34 +204,42 @@ def main():
         preset_name = list(preset_prompts.keys())[selected]
 
     # 对话循环
-    while True:
-        user_input = input("\n\033[36mYou：\033[0m").strip()
+    from concurrent.futures import ThreadPoolExecutor
 
-        if user_input.lower() in ["\\bye", "exit", "quit"]:
-            save_choice = input("\033[31m是否保存当前对话？(y/n): \033[0m").lower()
-            if save_choice == 'y':
-                save_history(preset_name, conversation_context)
-                print(f"\033[32m对话已保存到 {config.HISTORY_FILE}\033[30m")
-            print("对话结束")
-            break
-        user_input = user_input + get_current_time_info()
-        print(get_tokenize(user_input, config.tknz_path))
-        conversation_context.append({"role": "user", "content": user_input})
+    def process_response(response, preset_name):
+        ai_response = preprocess_response(response.choices[0].message.content).lstrip()
+        conversation_context.append({"role": "assistant", "content": ai_response})
+        print(f"\n{preset_name}：", add_newline_after_punctuation(ai_response))
+        print(get_tokenize(ai_response, config.tknz_path))
 
-        try:
-            response = client.chat.completions.create(model=use_model,
-                messages=conversation_context,
-                stream=use_stream,
-                temperature=use_temperature)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        while True:
+            user_input = input("\n\033[36mYou：\033[0m").strip()
 
-            ai_response = preprocess_response(response.choices[0].message.content).lstrip()
-            conversation_context.append({"role": "assistant", "content": ai_response})
+            if user_input.lower() in ["\\bye", "exit", "quit"]:
+                save_choice = input("\033[31m是否保存当前对话？(y/n): \033[0m").lower()
+                if save_choice == 'y':
+                    save_history(preset_name, conversation_context)
+                    print(f"\033[32m对话已保存到 {config.HISTORY_FILE}\033[30m")
+                print("对话结束")
+                break
 
-            print(f"\n{preset_name}：", add_newline_after_punctuation(ai_response))
-            print(get_tokenize(ai_response, config.tknz_path))
-        except Exception as e:
-            print("\033[31m发生错误：\033[0m", str(e))
-            conversation_context = conversation_context[-4:]
+            user_input += get_current_time_info()
+            print(get_tokenize(user_input, config.tknz_path))
+            conversation_context.append({"role": "user", "content": user_input})
+
+            try:
+                future = executor.submit(
+                    client.chat.completions.create,
+                    model=use_model,
+                    messages=conversation_context,
+                    stream=use_stream,
+                    temperature=use_temperature
+                )
+                future.add_done_callback(lambda f: process_response(f.result(), preset_name))
+            except Exception as e:
+                print("\033[31m发生错误：\033[0m", str(e))
+                conversation_context = conversation_context[-4:]
 
 
 def print_welcome():
@@ -194,8 +279,7 @@ def perform_operation():
         print("\033[31m输入无效，请输入一个有效的整数。\033[0m")
     perform_operation()
 
-
-if __name__ == "__main__":
+def mainloop():
     try:
         check_system_readiness()
         print("\033[32m系统自检通过\033[0m")
@@ -205,3 +289,6 @@ if __name__ == "__main__":
 
     print_welcome()
     perform_operation()
+
+if __name__ == "__main__":
+    mainloop()

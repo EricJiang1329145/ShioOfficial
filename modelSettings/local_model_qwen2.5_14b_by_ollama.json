@@ -1,0 +1,5 @@
+{
+  "model": "qwen2.5-14b",
+  "api_key": "sk-42576b8258364c2e8f350e511708e767",
+  "url": "http://localhost:11434/v1/"
+}

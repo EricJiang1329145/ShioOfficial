@@ -39,8 +39,67 @@ def extract_content_after_think(input_str):
         # 如果未找到 </think>，则返回原始字符串
         return input_str
 # 定义一个函数，用于预处理响应
+# 定义一个函数，用于预处理响应
 def preprocess_response(response):
     return replace_consecutive_newlines(extract_content_after_think(response)).lstrip()
+# 颜色代码配置
+COLOR_MAP = {
+    'warning': '\033[31m',  # 红色 (警告)
+    'prompt': '\033[32m',   # 绿色 (提示)
+    'speech': '\033[33m',   # 黄色 (发言)
+    'system': '\033[34m',   # 蓝色 (系统)
+    'default': '\033[0m'    # 默认
+}
+
+def q_input(prompt: str) -> str:
+    """带退出检测的输入函数"""
+    # 输入提示信息
+    result = input(f"{COLOR_MAP['prompt']}{prompt}\033[0m")
+    # 如果输入为q，则退出程序
+    if result.strip().lower() == 'q':
+        raise SystemExit("返回主菜单")
+    # 返回输入结果
+    return result
+
+def cprint(content: str, msg_type: str = '默认'):
+    """类型化彩色打印函数"""
+    # 根据msg_type获取对应的颜色
+    color = COLOR_MAP.get(msg_type, COLOR_MAP['默认'])
+    # 打印内容，并设置颜色
+    print(f"{color}{content}\033[0m")
+
+
+def read_json_config(file_path: str) -> dict:
+    """
+    读取并解析JSON格式的配置文件
+
+    参数:
+        file_path (str): 配置文件路径
+
+    返回:
+        dict: 解析后的配置字典
+
+    异常:
+        FileNotFoundError: 文件不存在时抛出
+        json.JSONDecodeError: JSON格式错误时抛出
+        KeyError: 缺少必要字段时抛出
+    """
+    try:
+        # 打开配置文件
+        with open(file_path, 'r', encoding='utf-8') as f:
+            # 解析JSON文件
+            config = json.load(f)
+            # 检查配置文件是否包含必要字段
+            if not all(k in config for k in ('model', 'api_key', 'url')):
+                raise KeyError('配置文件缺少必要字段')
+            # 返回解析后的配置字典
+            return config
+    except json.JSONDecodeError as e:
+        # 打印JSON解析失败信息
+        print(f"\033[31mJSON解析失败: {e}\033[0m")
+        # 抛出异常
+        raise
+
 def read_txt_file(file_name):
     try:
         # 使用with语句打开文件
@@ -107,7 +166,7 @@ def search_files(directory):
 def modify_json_system_content(file_path, new_content):
     try:
         if not os.path.exists(file_path):
-            print("错误: 文件未找到。")
+            cprint("错误: 文件未找到。", 'warning')
             return
 
         with open(file_path, 'r', encoding='utf-8') as file:
@@ -120,11 +179,11 @@ def modify_json_system_content(file_path, new_content):
 
         with open(file_path, 'w', encoding='utf-8') as file:
             json.dump(data, file, ensure_ascii=False, indent=2)
-        print("JSON 文件已成功更新。")
+        cprint("JSON 文件已成功更新。", 'prompt')
     except json.JSONDecodeError:
-        print("错误: 无法解析 JSON 文件。")
+        cprint("错误: 无法解析 JSON 文件。", 'warning')
     except Exception as e:
-        print(f"错误: 发生了一个未知错误: {e}")
+        cprint(f"错误: 发生了一个未知错误: {e}", 'warning')
 
 def ask_user_choice(file_list):
     """
@@ -133,17 +192,22 @@ def ask_user_choice(file_list):
     :return: 用户选择的文件路径
     """
     if not file_list:
-        print("未找到可读取的文件。")
+        cprint("未找到可读取的文件。", 'warning')
         return None
-    print("可读取的文件有：")
+    cprint("可读取的文件有：", 'prompt')
     for i, file in enumerate(file_list, start=1):
-        print(f"{i}. {file}")
+        cprint(f"{i}. {file}", 'system')
     while True:
         try:
-            choice = int(input("请输入要使用的文件编号: "))
+            choice = int(q_input("请输入要使用的文件编号: "))
             if 1 <= choice <= len(file_list):
                 return file_list[choice - 1]
             else:
-                print("输入的编号无效，请重新输入。")
+                cprint("输入的编号无效，请重新输入。", 'warning')
         except ValueError:
-            print("输入无效，请输入一个数字。")
+            cprint("输入无效，请输入一个数字。", 'warning')
+
+if __name__ == "__main__":
+    print("utils.py 被直接运行了。")
+    from main import mainloop
+    mainloop()
