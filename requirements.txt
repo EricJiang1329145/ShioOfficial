@@ -2,8 +2,3 @@ openai>=1.0.0
 python-dotenv>=0.21.0
 rich>=13.0.0
 transformers>=4.30.0
-
-# 标准库无需添加
-# sys
-# os
-# re
