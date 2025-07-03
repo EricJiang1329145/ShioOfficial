@@ -1,10 +1,14 @@
 import sys
 
-from openai import OpenAI
-
-from tknz.deepseek_tokenizer import get_tokenize
-from utils import *
 import os
+from utils import *
+
+# 延迟加载大模块
+def _lazy_imports():
+    global OpenAI, get_tokenize, ThreadPoolExecutor
+    from openai import OpenAI
+    from tknz.deepseek_tokenizer import get_tokenize
+    from concurrent.futures import ThreadPoolExecutor
 
 
 class ConfigManager:
@@ -35,23 +39,22 @@ class ConfigManager:
         self.model_settings_dir = os.getenv('MODEL_SETTINGS_DIR', 'modelSettings')
 
 config = ConfigManager()
+_CONFIG_CACHE = {'files': None, 'mtime': 0}
+
 def selected_file() -> str:
     """
-    交互式选择模型配置文件
+    交互式选择模型配置文件（带缓存机制）
 
-    流程:
-    1. 扫描配置目录获取可用文件列表
-    2. 用户交互式选择文件
-    3. 返回完整文件路径
-
-    返回:
-        str: 用户选择的配置文件绝对路径
-
-    异常:
-        FileNotFoundError: 当配置目录为空时抛出
+    优化点:
+    • 缓存文件列表和最后修改时间
+    • 仅当目录变更时重新扫描
     """
-    files = search_files(config.model_settings_dir)
-    selected_file = ask_user_choice(files)
+    current_mtime = os.path.getmtime(config.model_settings_dir)
+    if not _CONFIG_CACHE['files'] or current_mtime > _CONFIG_CACHE['mtime']:
+        _CONFIG_CACHE['files'] = search_files(config.model_settings_dir)
+        _CONFIG_CACHE['mtime'] = current_mtime
+    
+    selected_file = ask_user_choice(_CONFIG_CACHE['files'])
     print(f"\033[31m你选择的文件是: \033[0m{selected_file}")
     return selected_file
 
@@ -147,11 +150,16 @@ def check_system_readiness():
 
 
 # 主程序
+# 缓存模型配置
+_MODEL_CACHE = {}
+
 def main():
     try:
         msd = selected_file()
-        config_data = read_json_config(msd)
-        ums = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
+        if msd not in _MODEL_CACHE:
+            config_data = read_json_config(msd)
+            _MODEL_CACHE[msd] = ModelSettings(config_data['model'], config_data['api_key'], config_data['url'])
+        ums = _MODEL_CACHE[msd]
     except (FileNotFoundError, IndexError, ValueError) as e:
         print(f"\033[31m配置加载失败: {e}\033[0m")
         sys.exit(1)
@@ -212,7 +220,8 @@ def main():
         print(f"\n{preset_name}：", add_newline_after_punctuation(ai_response))
         print(get_tokenize(ai_response, config.tknz_path))
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    _lazy_imports()  # 实际需要时加载
+    with ThreadPoolExecutor(max_workers=2) as executor:  # 减少初始线程数
         while True:
             user_input = input("\n\033[36mYou：\033[0m").strip()
 
@@ -280,15 +289,14 @@ def perform_operation():
     perform_operation()
 
 def mainloop():
-    try:
-        check_system_readiness()
-        print("\033[32m系统自检通过\033[0m")
-    except Exception as e:
-        print(f"\033[31m系统初始化失败: {e}\033[0m")
-        sys.exit(1)
-
+    # 延迟系统检查到实际需要时
     print_welcome()
-    perform_operation()
+    try:
+        perform_operation()
+    except Exception as e:
+        check_system_readiness()  # 实际出错时才执行完整检查
+        print(f"\033[31m运行时错误: {e}\033[0m")
+        sys.exit(1)
 
 if __name__ == "__main__":
     mainloop()
