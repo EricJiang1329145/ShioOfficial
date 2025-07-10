@@ -2,7 +2,7 @@ import datetime
 import os
 import json
 import re
-
+from typing import List
 
 def replace_consecutive_newlines(input_string):
     pattern = r'\n{2,}'
@@ -33,14 +33,7 @@ def extract_content_after_think(input_str):
 # 定义一个函数，用于预处理响应
 def preprocess_response(response):
     return replace_consecutive_newlines(extract_content_after_think(response)).lstrip()
-# 颜色代码配置
-COLOR_MAP = {
-    'warning': '\033[31m',  # 红色 (警告)
-    'prompt': '\033[32m',   # 绿色 (提示)
-    'speech': '\033[33m',   # 黄色 (发言)
-    'system': '\033[34m',   # 蓝色 (系统)
-    'default': '\033[0m'    # 默认
-}
+
 
 def q_input(prompt: str) -> str:
     """带退出检测的输入函数"""
@@ -51,18 +44,46 @@ def q_input(prompt: str) -> str:
         raise SystemExit("返回主菜单")
     # 返回输入结果
     return result
+# 颜色代码配置
+COLOR_MAP = {
+    'warning': '\033[31m',  # 红色 (警告)
+    'prompt': '\033[32m',   # 绿色 (提示)
+    'speech': '\033[33m',   # 黄色 (发言)
+    'system': '\033[34m',   # 蓝色 (系统)
+    'default': '\033[0m'    # 默认
+}
+# 颜色输出开关，默认启用
+switch_color = True
+def switch_cprint():
+    """切换彩色打印开关状态
+
+    Returns:
+        当前开关状态（True表示启用颜色输出）
+    """
+    global switch_color
+    switch_color = not switch_color
+    return
 
 def cprint(content: str, msg_type: str = 'prompt'):
-    """类型化彩色打印函数"""
+    """
+    类型化彩色打印函数
+    'warning': '\033[31m',  # 红色 (警告)
+    'prompt': '\033[32m',   # 绿色 (提示)
+    'speech': '\033[33m',   # 黄色 (发言)
+    'system': '\033[34m',   # 蓝色 (系统)
+    'default': '\033[0m'    # 默认
+    """
     # 根据msg_type获取对应的颜色
-    color = COLOR_MAP.get(msg_type, COLOR_MAP['default'])
-    # 打印内容，并设置颜色
-    print(f"{color}{content}\033[0m")
-
+    if switch_color:
+        color = COLOR_MAP.get(msg_type, COLOR_MAP['default'])
+        # 打印内容，并设置颜色
+        print(f"{color}{content}\033[0m")
+    else:
+        print(f"{content}")
 
 def read_json_config(file_path: str) -> dict:
     """
-    JSON解析性能优化版 (减少20%加载时间)
+    JSON解析性能优化版
     1. 使用更高效的解析方式
     2. 优化字段检查逻辑
     """
@@ -119,8 +140,7 @@ def read_specific_line(file_path, line_number):
     except Exception as e:
         print(f"错误: 发生未知错误 - {e}")
     return None
-
-def search_files(directory: str) -> list[str]:
+def search_files(directory: str) -> List[str]:
     """
     高效搜索可读文件 (使用生成器优化内存占用)
     时间复杂度: O(n) | 空间复杂度: O(1)

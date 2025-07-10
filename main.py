@@ -121,7 +121,7 @@ def save_history(preset_name, context):
     try:
         log_queue.put((preset_name, context))
     except Exception as e:
-        print(f"\033[31m保存历史记录失败: \033[0m{str(e)}")
+        cprint(f"保存历史记录失败: {str(e)}",'warning')
 
 
 # 加载历史记录
@@ -136,7 +136,7 @@ def load_history():
                 history_cache.update(data)
                 return data['preset'], data['history']
     except Exception as e:
-        print(f"\033[31m加载历史记录失败: \033[0m{str(e)}")
+        cprint(f"加载历史记录失败: {str(e)}",'warning')
     return None, None
 
 
@@ -204,12 +204,13 @@ def main():
     if saved_preset and saved_context:
         # 如果找到历史记录，则打印提示信息并询问用户是否恢复
         cprint(f"找到上次的对话记录（预设角色：{saved_preset}", 'system')
-        choice = input("\033[31m是否恢复上次对话？(\033[0my\033[31m/\033[0mn\033[31m):\033[0m ").lower()
+        cprint("是否恢复上次对话？(y/n):",'speech')
+        choice = input().lower()
         if choice == 'y':
             # 如果用户选择恢复，则恢复对话并修改JSON文件
             preset_name = saved_preset
             conversation_context = saved_context
-            print("\033[31m对话已恢复，输入'退出'结束对话\033[0m")
+            cprint("对话已恢复，输入'退出'结束对话",'prompt')
             modify_json_system_content(config.HISTORY_FILE, file_content)
 
         else:
@@ -219,7 +220,7 @@ def main():
     if not saved_preset:
         # 选择预设流程
         conversation_context = []
-        print("\n\033[31m可用的角色预设：\033[0m")
+        cprint("可用的角色预设：",'system')
         for i, (name) in enumerate(preset_prompts.items(), 1):
             print(f"{i}. {name}")
 
@@ -241,11 +242,12 @@ def main():
             user_input = q_input("\nYou：").strip()
 
             if user_input.lower() in ["\\bye", "exit", "quit"]:
-                save_choice = input("\033[31m是否保存当前对话？(y/n): \033[0m").lower()
+                cprint("是否保存当前对话？(y/n): ",'speech')
+                save_choice = input().lower()
                 if save_choice == 'y':
                     save_history(preset_name, conversation_context)
-                    print(f"\033[32m对话已保存到 {config.HISTORY_FILE}\033[30m")
-                cprint("对话结束", 'system')
+                    cprint(f"对话已保存到 {config.HISTORY_FILE}",'prompt')
+                cprint("对话结束", 'prompt')
                 break
 
             user_input += get_current_time_info()
@@ -262,15 +264,15 @@ def main():
                 )
                 future.add_done_callback(lambda f: process_response(f.result(), preset_name))
             except Exception as e:
-                print("\033[31m发生错误：\033[0m", str(e))
+                cprint(f"发生错误：{str(e)}", 'warning')
                 conversation_context = conversation_context[-4:]
 
 
 def print_welcome():
-    print("欢迎使用本程序！")
-    print("\033[31m这是红色文本\033[0m")
-    print("\033[32m这是绿色文本\033[0m")
-    print("\033[1;34m这是亮蓝色文本\033[0m")
+    cprint("欢迎使用本程序！")
+    cprint("这是红色文本",'warning')
+    cprint("这是绿色文本",'prompt')
+    cprint("这是亮蓝色文本",'system')
 
 def calculate_sum():
     total = sum(range(1, 11))
@@ -287,15 +289,17 @@ def perform_operation():
     operations = {
         1: print_welcome,
         2: calculate_sum,
-        3 : main,
-        4: exit_program
+        3: main,
+        4: switch_cprint,
+        5: exit_program
     }
     # 遍历字典，打印操作和对应的函数名
     for key, value in operations.items():
         print(f"{key}. {value.__name__}")
     # 尝试获取用户输入的操作数字
     try:
-        choice = int(input("\033[31m请输入操作对应的数字：\033[0m"))
+        cprint("请输入操作对应的数字：","speech")
+        choice = int(input())
         # 判断用户输入的数字是否在字典中
         if choice in operations:
             # 调用对应的函数
@@ -305,10 +309,10 @@ def perform_operation():
                 return
         else:
             # 如果用户输入的数字不在字典中，则打印错误信息
-            print("\033[31m输入的数字无效，请输入有效数字。\033[0m")
+            cprint("输入的数字无效，请输入有效数字。",'warning')
     except ValueError:
         # 如果用户输入的不是整数，则打印错误信息
-        print("\033[31m输入无效，请输入一个有效的整数。\033[0m")
+        cprint("输入无效，请输入一个有效的整数。",'warning')
     # 递归调用perform_operation函数，重新开始
     perform_operation()
 
@@ -319,7 +323,7 @@ def mainloop():
         perform_operation()
     except Exception as e:
         check_system_readiness()  # 实际出错时才执行完整检查
-        print(f"\033[31m运行时错误: {e}\033[0m")
+        cprint(f"运行时错误: {e}",'warning')
         sys.exit(1)
 
 if __name__ == "__main__":
