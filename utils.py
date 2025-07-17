@@ -3,7 +3,7 @@ import os
 import json
 import re
 from typing import List
-
+import main
 def replace_consecutive_newlines(input_string):
     pattern = r'\n{2,}'
     return re.sub(pattern, '\n', input_string)
@@ -38,10 +38,12 @@ def preprocess_response(response):
 def q_input(prompt: str) -> str:
     """带退出检测的输入函数"""
     # 输入提示信息
-    result = input(f"{COLOR_MAP['prompt']}{prompt}\033[0m")
+    cprint(prompt,'system')
+    result = input()
     # 如果输入为q，则退出程序
     if result.strip().lower() == 'q':
-        raise SystemExit("返回主菜单")
+        cprint("返回主菜单",'prompt')
+        main.mainloop()
     # 返回输入结果
     return result
 # 颜色代码配置
