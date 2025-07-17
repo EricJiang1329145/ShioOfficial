@@ -13,7 +13,7 @@ _WEEKDAY_NAMES = ('星期一', '星期二', '星期三', '星期四', '星期五
 
 def get_current_time_info() -> str:
     """
-    优化时间生成函数 (执行速度提升3倍)
+    优化时间生成函数 (执行速度提升)
     1. 使用元组替代字典存储星期映射
     2. 合并字符串操作
     """
@@ -54,8 +54,8 @@ COLOR_MAP = {
     'system': '\033[34m',   # 蓝色 (系统)
     'default': '\033[0m'    # 默认
 }
-# 颜色输出开关，默认启用
-switch_color = True
+# 颜色输出开关，默认禁用
+switch_color = False
 def switch_cprint():
     """切换彩色打印开关状态
 
@@ -214,14 +214,78 @@ def ask_user_choice(file_list):
     while True:
         try:
             choice = int(q_input("请输入要使用的文件编号: "))
-            if 1 <= choice <= len(file_list):
-                return file_list[choice - 1]
+            if 1 <= choice <= len(json_files):  # 修改为json_files
+                return json_files[choice - 1]  # 修改为json_files
             else:
                 cprint("输入的编号无效，请重新输入。", 'warning')
         except ValueError:
             cprint("输入无效，请输入一个数字。", 'warning')
+def load_history():
+    global history_cache
+    try:
+        if os.path.exists(config.HISTORY_FILE):
+            with open(config.HISTORY_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                history_cache.update(data)
+                return data.get('history')
+    except Exception as e:
+        cprint(f"加载历史记录失败: {str(e)}",'warning')
+    return None
 
+def save_history(context):
+    init_config()
+    global history_cache
+    history_cache = {'history': context}
+    try:
+        log_queue.put(context)
+    except Exception as e:
+        cprint(f"保存历史记录失败: {str(e)}",'warning')
+
+def get_json_value(file_path, key):
+    """
+    安全获取JSON文件指定键值
+    
+    :param file_path: JSON文件路径
+    :param key: 需要获取的键名
+    :return: 键值或None
+    """
+    try:
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+            return data.get(key)
+    except Exception as e:
+        logging.warning(f"读取{file_path}失败: {str(e)}")
+        return None
+
+
+def ask_user_choice(file_list):
+    """
+    询问用户选择使用哪个文件
+    :param file_list: 可读取文件的列表
+    :return: 用户选择的文件路径
+    """
+    # 过滤并增强JSON文件显示
+    json_files = [f for f in file_list if f.lower().endswith('.json')]
+    if not json_files:
+        cprint("未找到有效的JSON配置文件", 'warning')
+        return None
+    
+    cprint("\n可用模型配置（名称 ▶ 文件）", 'prompt')
+    cprint("─"*40, 'system')
+    for i, file_path in enumerate(json_files, 1):
+        model_name = get_json_value(file_path, 'model') or '未命名模型'
+        file_name = os.path.basename(file_path)
+        cprint(f"{i}. {model_name:25} ▶ {file_name}", 'system')
+    while True:
+        try:
+            choice = int(q_input("请输入要使用的文件编号: "))
+            if 1 <= choice <= len(json_files):  # 修改为json_files
+                return json_files[choice - 1]  # 修改为json_files
+            else:
+                cprint("输入的编号无效，请重新输入。", 'warning')
+        except ValueError:
+            cprint("输入无效，请输入一个数字。", 'warning')
 if __name__ == "__main__":
-    print("utils.py 被直接运行了。")
+    print("utils.py 被直接运行了。一些main.py的变量可能无法正常运行。")
     from main import mainloop
     mainloop()

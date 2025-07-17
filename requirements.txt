@@ -1,2 +1,4 @@
 openai>=1.0.0
 transformers>=4.30.0
+torch
+tensorflow>=2.0.0

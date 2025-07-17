@@ -169,64 +169,50 @@ def main():
         # 如果发生错误，则打印错误信息并退出程序
         cprint(f"配置加载失败: {e}", 'warning')
         sys.exit(1)
-
+    '''
     while True:  # 输入验证循环
         try:
             # 获取用户输入的角色编号
-            selected = int(input("请选择预设角色（输入编号）：")) - 1
+            selected = int(q_input("请选择预设角色（输入编号）：")) - 1
             # 获取对应角色的预设名称
             preset_name = list(preset_prompts.keys())[selected]
             break
         except (ValueError, IndexError):
             # 如果输入无效，则打印提示信息
             cprint("输入无效，请重新选择", 'warning')
-
+    '''
     # 介绍角色
     ums.introduce()
     # 获取模型、API密钥和URL
-    use_model = ums.model
-    api_key_s = ums.apiKey
-    urls = ums.url
-
     use_stream = False
     use_temperature = 0.9
     # 创建OpenAI客户端
-    client = OpenAI(api_key=api_key_s, base_url=urls)
+    from openai import OpenAI
+    client = OpenAI(api_key=ums.apiKey, base_url=ums.url)
 
     # 调用函数并传入文件名
-    file_content = read_txt_file('prompt.txt')
-
+    file_path = msd  # 使用选择的模型配置文件路径
+    with open(file_path, 'r', encoding='utf-8') as file:
+    # 加载 JSON 数据
+        data = json.load(file)
+    # 提取 prompt 字段的内容并赋值给 prompt_content 变量
+        prompt_content = data.get('prompt')
+        prompt_name = data.get('name')
     # 提示词预设库
-    preset_prompts = {"林汐然": file_content}
+    preset_prompts = {'林汐然': prompt_content}
     # 尝试加载历史记录
-    saved_preset, saved_context = load_history()
+    saved_context = load_history()
 
-    if saved_preset and saved_context:
-        # 如果找到历史记录，则打印提示信息并询问用户是否恢复
-        cprint(f"找到上次的对话记录（预设角色：{saved_preset}", 'system')
+    if saved_context:
+        cprint("找到上次的对话记录", 'system')
         cprint("是否恢复上次对话？(y/n):",'speech')
         choice = input().lower()
         if choice == 'y':
-            # 如果用户选择恢复，则恢复对话并修改JSON文件
-            preset_name = saved_preset
             conversation_context = saved_context
             cprint("对话已恢复，输入'退出'结束对话",'prompt')
-            modify_json_system_content(config.HISTORY_FILE, file_content)
 
-        else:
-            # 如果用户选择不恢复，则清空历史记录
-            saved_preset = None
-
-    if not saved_preset:
-        # 选择预设流程
-        conversation_context = []
-        cprint("可用的角色预设：",'system')
-        for i, (name) in enumerate(preset_prompts.items(), 1):
-            print(f"{i}. {name}")
-
-        selected = int(q_input("请选择预设角色（输入编号）：")) - 1
-        preset_name = list(preset_prompts.keys())[selected]
-
+    # 直接使用林汐然预设
+    conversation_context = [{"role": "system", "content": preset_prompts['林汐然']}]
     # 对话循环
     from concurrent.futures import ThreadPoolExecutor
 
@@ -245,7 +231,7 @@ def main():
                 cprint("是否保存当前对话？(y/n): ",'speech')
                 save_choice = input().lower()
                 if save_choice == 'y':
-                    save_history(preset_name, conversation_context)
+                    save_history(conversation_context)
                     cprint(f"对话已保存到 {config.HISTORY_FILE}",'prompt')
                 cprint("对话结束", 'prompt')
                 break
@@ -257,7 +243,7 @@ def main():
             try:
                 future = executor.submit(
                     client.chat.completions.create,
-                    model=use_model,
+                    model=ums.model,
                     messages=conversation_context,
                     stream=use_stream,
                     temperature=use_temperature
@@ -319,12 +305,6 @@ def perform_operation():
 def mainloop():
     # 延迟系统检查到实际需要时
     print_welcome()
-    try:
-        perform_operation()
-    except Exception as e:
-        check_system_readiness()  # 实际出错时才执行完整检查
-        cprint(f"运行时错误: {e}",'warning')
-        sys.exit(1)
-
+    perform_operation()
 if __name__ == "__main__":
     mainloop()
