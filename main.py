@@ -1,13 +1,17 @@
-import sys
-
-import os
-from utils import *
+# 导入系统级模块
+import sys  # 系统相关功能模块
+import os  # 操作系统接口模块
+# 导入自定义工具模块
+from utils import *  # 包含常用工具函数
 
 # 延迟加载大模块
 def _lazy_imports():
-    global OpenAI, get_tokenize, ThreadPoolExecutor
+    """
+    延迟加载大型模块以优化启动速度
+    全局声明后在实际需要时导入
+    """
+    global OpenAI, ThreadPoolExecutor
     from openai import OpenAI
-    from tknz.deepseek_tokenizer import get_tokenize
     from concurrent.futures import ThreadPoolExecutor
 
 
@@ -24,7 +28,8 @@ class ConfigManager:
     • HISTORY_FILE: 对话历史存储路径
     • model_settings_dir: 模型配置目录 (环境变量: MODEL_SETTINGS_DIR)
     使用示例：
-    >>> config = ConfigManager()
+    >>> # 实例化配置管理器
+config = ConfigManager()  # 创建全局配置对象
     >>> print(config.HISTORY_FILE)
     """
     # 初始化ConfigManager类
@@ -39,7 +44,8 @@ class ConfigManager:
         self.model_settings_dir = os.getenv('MODEL_SETTINGS_DIR', 'modelSettings')
 
 config = ConfigManager()
-_CONFIG_CACHE = {'files': None, 'mtime': 0}
+# 配置缓存字典(文件列表, 最后修改时间)
+_CONFIG_CACHE = {'files': None, 'mtime': 0}  # 缓存模型配置文件信息
 
 def selected_file() -> str:
     """
@@ -108,18 +114,26 @@ def async_writer():
         preset, ctx = item
         with file_lock:
             with open(config.HISTORY_FILE, 'w', encoding='utf-8') as f:
-                json.dump({"preset": preset, "history": ctx}, f, ensure_ascii=False, indent=2)
+                json.dump({"messages": [msg for msg in ctx if isinstance(msg, dict)]}, f, ensure_ascii=False, indent=2)
 
 from threading import Thread
 writer_thread = Thread(target=async_writer, daemon=True)
-writer_thread.start()
+# 启动异步写入线程
+writer_thread.start()  # 开始运行后台保存线程
 
-def save_history(preset_name, context):
+def save_history(context):
+    """
+    异步保存对话历史记录到文件
+    参数:
+        context: 需要保存的对话上下文列表
+    """
+    if not isinstance(context, list):
+        context = []
     init_config()
     global history_cache
-    history_cache = {'preset': preset_name, 'history': context}
+    history_cache = {'messages': context}
     try:
-        log_queue.put((preset_name, context))
+        log_queue.put(context)
     except Exception as e:
         cprint(f"保存历史记录失败: {str(e)}",'warning')
 
@@ -128,13 +142,13 @@ def save_history(preset_name, context):
 def load_history():
     global history_cache
     if history_cache:
-        return history_cache.get('preset'), history_cache.get('history')
+        return history_cache.get('messages')
     try:
         if os.path.exists(config.HISTORY_FILE):
             with open(config.HISTORY_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                history_cache.update(data)
-                return data['preset'], data['history']
+                history_cache = data
+                return data.get('messages', [])
     except Exception as e:
         cprint(f"加载历史记录失败: {str(e)}",'warning')
     return None, None
@@ -151,7 +165,8 @@ def check_system_readiness():
 
 # 主程序
 # 缓存模型配置
-_MODEL_CACHE = {}
+# 模型配置缓存字典
+_MODEL_CACHE = {}  # 键:文件路径，值:ModelSettings对象
 
 def main():
     try:
@@ -182,9 +197,11 @@ def main():
             cprint("输入无效，请重新选择", 'warning')
     '''
     # 介绍角色
-    ums.introduce()
+    # 显示模型基本信息
+    ums.introduce()  # 调用模型介绍方法
     # 获取模型、API密钥和URL
-    use_stream = False
+    # 流式响应开关
+    use_stream = False  # 控制是否使用流式API
     use_temperature = 0.9
     # 创建OpenAI客户端
     from openai import OpenAI
@@ -197,9 +214,9 @@ def main():
         data = json.load(file)
     # 提取 prompt 字段的内容并赋值给 prompt_content 变量
         prompt_content = data.get('prompt')
-        prompt_name = data.get('name')
+        preset_name = '林汐然'
     # 提示词预设库
-    preset_prompts = {'林汐然': prompt_content}
+    preset_prompts = {preset_name: prompt_content}
     # 尝试加载历史记录
     saved_context = load_history()
 
@@ -208,11 +225,14 @@ def main():
         cprint("是否恢复上次对话？(y/n):",'speech')
         choice = input().lower()
         if choice == 'y':
-            conversation_context = saved_context
+            conversation_context = saved_context.get('messages', []) if isinstance(saved_context, dict) else saved_context if isinstance(saved_context, list) else []
             cprint("对话已恢复，输入'退出'结束对话",'prompt')
-
-    # 直接使用林汐然预设
-    conversation_context = [{"role": "system", "content": preset_prompts['林汐然']}]
+        else:
+            # 使用林汐然预设
+            conversation_context = [{"role": "system", "content": preset_prompts[preset_name]}]
+    else:
+        # 直接使用林汐然预设
+        conversation_context = [{"role": "system", "content": preset_prompts['林汐然']}]
     # 对话循环
     from concurrent.futures import ThreadPoolExecutor
 
@@ -220,10 +240,10 @@ def main():
         ai_response = preprocess_response(response.choices[0].message.content).lstrip()
         conversation_context.append({"role": "assistant", "content": ai_response})
         cprint(f"{preset_name}：{add_newline_after_punctuation(ai_response)}", 'speech')
-        print(get_tokenize(ai_response, config.tknz_path))
 
     _lazy_imports()  # 实际需要时加载
-    with ThreadPoolExecutor(max_workers=2) as executor:  # 减少初始线程数
+    # 创建线程池执行器
+    with ThreadPoolExecutor(max_workers=2) as executor:  # 最多2个并发工作线程
         while True:
             user_input = q_input("\nYou：").strip()
 
@@ -231,14 +251,21 @@ def main():
                 cprint("是否保存当前对话？(y/n): ",'speech')
                 save_choice = input().lower()
                 if save_choice == 'y':
-                    save_history(conversation_context)
+                    save_history(conversation_context['messages'])
                     cprint(f"对话已保存到 {config.HISTORY_FILE}",'prompt')
                 cprint("对话结束", 'prompt')
                 break
 
             user_input += get_current_time_info()
-            print(get_tokenize(user_input, config.tknz_path))
             conversation_context.append({"role": "user", "content": user_input})
+            
+            # 记录对话上下文到日志文件
+            log_path = os.path.join(config.CONFIG_DIR, 'conversation_log.json')
+            with file_lock:
+                with open(log_path, 'a', encoding='utf-8') as log_file:
+                    json.dump(conversation_context, log_file, ensure_ascii=False)
+                    # 写入换行符分隔记录
+                    log_file.write('\n')  # 确保每条记录独立成行
 
             try:
                 future = executor.submit(
@@ -248,7 +275,9 @@ def main():
                     stream=use_stream,
                     temperature=use_temperature
                 )
-                future.add_done_callback(lambda f: process_response(f.result(), preset_name))
+                future.add_done_callback(lambda f: process_response(f.result(), '林汐然'))
+                # 等待模型回复完成后再请求新输入
+                future.result()
             except Exception as e:
                 cprint(f"发生错误：{str(e)}", 'warning')
                 conversation_context = conversation_context[-4:]
