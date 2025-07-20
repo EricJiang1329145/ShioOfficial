@@ -1,6 +1,7 @@
 # 导入系统级模块
 import sys  # 系统相关功能模块
 import os  # 操作系统接口模块
+import datetime  # 添加日期时间模块
 # 导入自定义工具模块
 from utils import *  # 包含常用工具函数
 
@@ -39,7 +40,9 @@ config = ConfigManager()  # 创建全局配置对象
         # 获取当前文件所在目录，并拼接上tknz目录，得到tknz_path
         self.tknz_path = os.path.join(os.path.dirname(__file__), 'tknz')
         # 将CONFIG_DIR和conversation_history.json拼接，得到HISTORY_FILE
-        self.HISTORY_FILE = os.path.join(self.CONFIG_DIR, 'conversation_history.json')
+        self.LOG_DIR = os.path.join(self.CONFIG_DIR, 'logs')
+        os.makedirs(self.LOG_DIR, exist_ok=True)
+        self.LOG_DIR = os.path.join(self.CONFIG_DIR, 'logs')
         # 获取环境变量MODEL_SETTINGS_DIR的值，如果没有设置，则默认为modelSettings
         self.model_settings_dir = os.getenv('MODEL_SETTINGS_DIR', 'modelSettings')
 
@@ -111,9 +114,9 @@ def async_writer():
         item = log_queue.get()
         if item is None:
             break
-        preset, ctx = item
+        log_path, ctx = item
         with file_lock:
-            with open(config.HISTORY_FILE, 'w', encoding='utf-8') as f:
+            with open(log_path, 'w', encoding='utf-8') as f:
                 json.dump({"messages": [msg for msg in ctx if isinstance(msg, dict)]}, f, ensure_ascii=False, indent=2)
 
 from threading import Thread
@@ -132,8 +135,12 @@ def save_history(context):
     init_config()
     global history_cache
     history_cache = {'messages': context}
+    
+    # 动态生成带日期的日志文件路径
+    log_file = os.path.join(config.LOG_DIR, f'session_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
+    
     try:
-        log_queue.put(context)
+        log_queue.put((log_file, context))
     except Exception as e:
         cprint(f"保存历史记录失败: {str(e)}",'warning')
 
